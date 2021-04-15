@@ -1,6 +1,27 @@
+[tool.poetry]
+name = "neural-pseudo-scan"
+version = "0.1.0"
+description = "Neural pseudo scan"
+authors = ["Brendan Duke <brendanw.duke@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.25.1"
+ffmpeg-python = "^0.2.0"
+tqdm = "^4.60.0"
+scikit-image = "^0.18.1"
+click = "^7.1.2"
+numpy = "^1.19.5"
+flax = "^0.3.3"
+jax = "^0.2.12"
+gin-config = "^0.4.0"
+open3d = "^0.12.0"
+nerfies = {git = "https://github.com/dukebw/nerfies.git", rev = "main"}
+frozendict = "^1.2"
+
+[tool.poetry.dev-dependencies]
+
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
-build-backend = "setuptools.build_meta"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
