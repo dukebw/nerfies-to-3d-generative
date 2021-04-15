@@ -28,11 +28,6 @@ from PIL import Image
 from pytorch3d.structures import Pointclouds
 
 
-def show_image(image, fmt="png"):
-    image = image_utils.image_to_uint8(image)
-    Image.fromarray(image).show()
-
-
 @click.group()
 def sample_nerfie():
     pass
@@ -40,10 +35,11 @@ def sample_nerfie():
 
 @click.command()
 @click.option("--data-dir", type=str, required=True)
+@click.option("--frame-step", type=int, default=1)
 @click.option("--output-dir", type=str, required=True)
 @click.option("--point-cloud-filename", type=str, required=True)
 @click.option("--train-dir", type=str, required=True)
-def sample_points(data_dir, output_dir, point_cloud_filename, train_dir):
+def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_dir):
     os.makedirs(output_dir, exist_ok=True)
 
     checkpoint_dir = Path(train_dir, "checkpoints")
@@ -73,8 +69,6 @@ def sample_points(data_dir, output_dir, point_cloud_filename, train_dir):
         use_warp_id=model_config.use_warp,
         random_seed=exp_config.random_seed,
     )
-
-    # show_image(datasource.load_rgb(datasource.train_ids[0]))
 
     rng = jax.random.PRNGKey(exp_config.random_seed)
     np.random.seed(exp_config.random_seed + jax.host_id())
@@ -145,7 +139,7 @@ def sample_points(data_dir, output_dir, point_cloud_filename, train_dir):
     )
 
     test_camera_paths = datasource.glob_cameras(
-        Path(data_dir, "camera-paths/orbit-extreme")
+        Path(data_dir, "camera-paths/orbit-mild")
     )
     test_cameras = utils.parallel_map(
         datasource.load_camera, test_camera_paths, show_pbar=True
@@ -157,7 +151,7 @@ def sample_points(data_dir, output_dir, point_cloud_filename, train_dir):
     results = []
     point_cloud_xyz = []
     point_cloud_rgb = []
-    for i in range(0, len(test_cameras), 10):
+    for i in range(0, len(test_cameras), frame_step):
         print(f"Rendering frame {i+1}/{len(test_cameras)}")
         camera = test_cameras[i]
         batch = datasets.camera_to_rays(camera)
@@ -182,8 +176,6 @@ def sample_points(data_dir, output_dir, point_cloud_filename, train_dir):
         )
         points_mid = jnp.sum(opaqueness_mask[..., None] * sampled_points, axis=-2)
 
-        # points_expected = (weights[..., None] * sampled_points).sum(axis=-2)
-        # point_cloud_xyz.append(np.array(points_expected.reshape(-1, 3)))
         point_cloud_xyz.append(np.array(points_mid.reshape(-1, 3)))
         point_cloud_rgb.append(np.array(pred_color.reshape(-1, 3)))
 
@@ -220,6 +212,10 @@ def visualize_point_cloud(point_cloud_path):
     point_cloud.points = o3d.utility.Vector3dVector(point_cloud_np["verts"])
     point_cloud.colors = o3d.utility.Vector3dVector(point_cloud_np["rgb"])
     o3d.visualization.draw_geometries([point_cloud])
+
+    point_cloud_path_o3d = os.path.splitext(point_cloud_path)[0]
+    point_cloud_path_o3d = f"{point_cloud_path_o3d}_o3d.pcd"
+    o3d.io.write_point_cloud(point_cloud_path_o3d, point_cloud)
 
 
 sample_nerfie.add_command(sample_points)
