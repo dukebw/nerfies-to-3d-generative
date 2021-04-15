@@ -34,12 +34,22 @@ def sample_nerfie():
 
 
 @click.command()
+@click.option("--camera-path", type=str, default="orbit-mild")
 @click.option("--data-dir", type=str, required=True)
+@click.option("--depth-threshold", type=float, default=0.5)
 @click.option("--frame-step", type=int, default=1)
 @click.option("--output-dir", type=str, required=True)
 @click.option("--point-cloud-filename", type=str, required=True)
 @click.option("--train-dir", type=str, required=True)
-def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_dir):
+def sample_points(
+    camera_path,
+    data_dir,
+    depth_threshold,
+    frame_step,
+    output_dir,
+    point_cloud_filename,
+    train_dir,
+):
     os.makedirs(output_dir, exist_ok=True)
 
     checkpoint_dir = Path(train_dir, "checkpoints")
@@ -139,7 +149,7 @@ def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_
     )
 
     test_camera_paths = datasource.glob_cameras(
-        Path(data_dir, "camera-paths/orbit-mild")
+        Path(data_dir, os.path.join("camera-paths", camera_path))
     )
     test_cameras = utils.parallel_map(
         datasource.load_camera, test_camera_paths, show_pbar=True
@@ -151,6 +161,7 @@ def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_
     results = []
     point_cloud_xyz = []
     point_cloud_rgb = []
+    cumulative_weights = []
     for i in range(0, len(test_cameras), frame_step):
         print(f"Rendering frame {i+1}/{len(test_cameras)}")
         camera = test_cameras[i]
@@ -170,9 +181,10 @@ def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_
             sampled_points,
             weights,
         ) = render_fn(state, batch, rng=rng)
+        cumulative_weights.append(jnp.cumsum(weights, axis=-1).flatten())
 
         opaqueness_mask = model_utils.compute_opaqueness_mask(
-            weights, depth_threshold=0.5
+            weights, depth_threshold=depth_threshold
         )
         points_mid = jnp.sum(opaqueness_mask[..., None] * sampled_points, axis=-2)
 
@@ -195,6 +207,14 @@ def sample_points(data_dir, frame_step, output_dir, point_cloud_filename, train_
                 "rgb": np.concatenate(point_cloud_rgb, axis=0),
             },
         )
+
+    plt.hist(np.array(np.concatenate(cumulative_weights)), bins=200)
+    plt.title("D-NeRF Cumulative Density Distribution")
+    plt.xlabel("Cumulative Density")
+    plt.ylabel("Number of Sample Points")
+    hist_fname = os.path.basename(point_cloud_filename)
+    hist_fname = f"{hist_fname}_cumulative_weights_hist.pdf"
+    plt.savefig(os.path.join(output_dir, hist_fname))
 
 
 @click.command()
