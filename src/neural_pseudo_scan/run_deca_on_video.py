@@ -112,6 +112,10 @@ def extract_depth(deca_dir, downsample_factor, input_images_dir, output_dir):
             codedict = deca.encode(image_warped)
             opdict, visdict = deca.decode(codedict)
 
+            deca.save_obj(
+                os.path.join(output_dir, f"{img_name}_{face_idx}.obj"), opdict
+            )
+
             depth_image = deca.render.render_depth(
                 opdict["transformed_vertices"]
             ).repeat(1, 3, 1, 1)
