@@ -20,11 +20,35 @@ def run_deca_on_video():
 
 
 @click.command()
+@click.option("--deca-dir", type=str, required=True)
 @click.option("--downsample-factor", type=float, default=1.0)
 @click.option("--input-images-dir", type=str, required=True)
 @click.option("--output-dir", type=str, required=True)
-def extract_depth(downsample_factor, input_images_dir, output_dir):
+def extract_depth(deca_dir, downsample_factor, input_images_dir, output_dir):
     deca_cfg.model.use_tex = True
+    deca_cfg.pretrained_modelpath = os.path.join(deca_dir, "data", "deca_model.tar")
+    deca_cfg.model.topology_path = os.path.join(deca_dir, "data", "head_template.obj")
+    # texture data original from http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip
+    deca_cfg.model.dense_template_path = os.path.join(
+        deca_dir, "data", "texture_data_256.npy"
+    )
+    deca_cfg.model.fixed_displacement_path = os.path.join(
+        deca_dir, "data", "fixed_displacement_256.npy"
+    )
+    deca_cfg.model.flame_model_path = os.path.join(
+        deca_dir, "data", "generic_model.pkl"
+    )
+    deca_cfg.model.flame_lmk_embedding_path = os.path.join(
+        deca_dir, "data", "landmark_embedding.npy"
+    )
+    deca_cfg.model.face_mask_path = os.path.join(deca_dir, "data", "uv_face_mask.png")
+    deca_cfg.model.face_eye_mask_path = os.path.join(
+        deca_dir, "data", "uv_face_eye_mask.png"
+    )
+    deca_cfg.model.mean_tex_path = os.path.join(deca_dir, "data", "mean_texture.jpg")
+    deca_cfg.model.tex_path = os.path.join(
+        deca_dir, "data", "FLAME_albedo_from_BFM.npz"
+    )
     crop_size = 224
     scale = 1.25
 

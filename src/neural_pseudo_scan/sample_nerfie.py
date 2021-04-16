@@ -34,6 +34,14 @@ def sample_nerfie():
 
 
 @click.command()
+def register_face_geometries():
+    nerf_point_cloud = o3d.io.read_point_cloud(
+        "data/images/mustafa-rendered-nerfie/mustafa_o3d.pcd"
+    )
+    deca_mesh = o3d.io.read_triangle_mesh()
+
+
+@click.command()
 @click.option("--camera-path", type=str, default="orbit-mild")
 @click.option("--data-dir", type=str, required=True)
 @click.option("--depth-threshold", type=float, default=0.5)
@@ -181,7 +189,8 @@ def sample_points(
             sampled_points,
             weights,
         ) = render_fn(state, batch, rng=rng)
-        cumulative_weights.append(jnp.cumsum(weights, axis=-1).flatten())
+        if (i % 10) == 0:
+            cumulative_weights.append(np.array(jnp.cumsum(weights, axis=-1).flatten()))
 
         opaqueness_mask = model_utils.compute_opaqueness_mask(
             weights, depth_threshold=depth_threshold
@@ -238,6 +247,7 @@ def visualize_point_cloud(point_cloud_path):
     o3d.io.write_point_cloud(point_cloud_path_o3d, point_cloud)
 
 
+sample_nerfie.add_command(register_face_geometries)
 sample_nerfie.add_command(sample_points)
 sample_nerfie.add_command(visualize_point_cloud)
 

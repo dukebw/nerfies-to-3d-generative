@@ -19,6 +19,8 @@ gin-config = "^0.4.0"
 open3d = "^0.12.0"
 nerfies = {git = "https://github.com/dukebw/nerfies.git", rev = "main"}
 frozendict = "^1.2"
+decalib-brendanduke = {git = "https://github.com/dukebw/DECA"}
+chumpy = "^0.70"
 
 [tool.poetry.dev-dependencies]
 
