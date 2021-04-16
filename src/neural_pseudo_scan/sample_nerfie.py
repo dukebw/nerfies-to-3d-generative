@@ -1,3 +1,4 @@
+import copy
 import functools
 import logging
 import os
@@ -28,17 +29,83 @@ from PIL import Image
 from pytorch3d.structures import Pointclouds
 
 
+def draw_registration_result(source, target, transformation):
+    source_temp = copy.deepcopy(source)
+    target_temp = copy.deepcopy(target)
+    source_temp.transform(transformation)
+    o3d.visualization.draw_geometries([source_temp, target_temp])
+
+
 @click.group()
 def sample_nerfie():
     pass
 
 
 @click.command()
-def register_face_geometries():
-    nerf_point_cloud = o3d.io.read_point_cloud(
-        "data/images/mustafa-rendered-nerfie/mustafa_o3d.pcd"
+@click.option("--mesh-path")
+def convert_mesh_to_point_cloud(mesh_path):
+    mesh = o3d.io.read_triangle_mesh(mesh_path, enable_post_processing=True)
+    point_cloud = mesh.sample_points_uniformly(number_of_points=10 ** 5)
+    o3d.visualization.draw_geometries([point_cloud])
+
+    point_cloud_path = f"{os.path.splitext(mesh_path)[0]}.pcd"
+    o3d.io.write_point_cloud(point_cloud_path, point_cloud)
+
+
+@click.command()
+@click.option("--point-cloud-path")
+def crop_point_cloud_interactively(point_cloud_path):
+    point_cloud = o3d.io.read_point_cloud(point_cloud_path)
+    o3d.visualization.draw_geometries_with_editing([point_cloud])
+
+
+@click.command()
+@click.option("--deca-point-cloud-path", type=str, required=True)
+@click.option("--nerf-point-cloud-path", type=str, required=True)
+def register_face_geometries(deca_point_cloud_path, nerf_point_cloud_path):
+    nerf_point_cloud = o3d.io.read_point_cloud(nerf_point_cloud_path)
+    nerf_point_cloud.estimate_normals()
+    deca_point_cloud = o3d.io.read_point_cloud(deca_point_cloud_path)
+    deca_point_cloud.estimate_normals()
+
+    trans_init = np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.05],
+            [0.0, 0.0, 1.0, -0.2],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
     )
-    deca_mesh = o3d.io.read_triangle_mesh()
+
+    threshold = 2.0
+
+    print("Initial alignment")
+    evaluation = o3d.pipelines.registration.evaluate_registration(
+        deca_point_cloud, nerf_point_cloud, threshold, trans_init
+    )
+    print(evaluation)
+
+    registration_point2plane = o3d.pipelines.registration.registration_icp(
+        deca_point_cloud,
+        nerf_point_cloud,
+        max_correspondence_distance=threshold,
+        init=trans_init,
+        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+    )
+
+    print("Point to plane ICP")
+    evaluation = o3d.pipelines.registration.evaluate_registration(
+        deca_point_cloud,
+        nerf_point_cloud,
+        threshold,
+        registration_point2plane.transformation,
+    )
+    print(evaluation)
+
+    draw_registration_result(
+        deca_point_cloud, nerf_point_cloud, registration_point2plane.transformation
+    )
 
 
 @click.command()
@@ -247,6 +314,8 @@ def visualize_point_cloud(point_cloud_path):
     o3d.io.write_point_cloud(point_cloud_path_o3d, point_cloud)
 
 
+sample_nerfie.add_command(convert_mesh_to_point_cloud)
+sample_nerfie.add_command(crop_point_cloud_interactively)
 sample_nerfie.add_command(register_face_geometries)
 sample_nerfie.add_command(sample_points)
 sample_nerfie.add_command(visualize_point_cloud)
