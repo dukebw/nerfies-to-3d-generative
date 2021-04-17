@@ -45,11 +45,28 @@ def sample_nerfie():
 @click.option("--mesh-path")
 def convert_mesh_to_point_cloud(mesh_path):
     mesh = o3d.io.read_triangle_mesh(mesh_path, enable_post_processing=True)
+    o3d.visualization.draw_geometries([mesh])
+
     point_cloud = mesh.sample_points_uniformly(number_of_points=10 ** 5)
     o3d.visualization.draw_geometries([point_cloud])
 
     point_cloud_path = f"{os.path.splitext(mesh_path)[0]}.pcd"
     o3d.io.write_point_cloud(point_cloud_path, point_cloud)
+
+
+@click.command()
+@click.option("--point-cloud-path", type=str, required=True)
+def convert_np_point_cloud_to_o3d(point_cloud_path):
+    point_cloud_np = np.load(point_cloud_path, allow_pickle=True).item()
+
+    point_cloud = o3d.geometry.PointCloud()
+    point_cloud.points = o3d.utility.Vector3dVector(point_cloud_np["verts"])
+    point_cloud.colors = o3d.utility.Vector3dVector(point_cloud_np["rgb"])
+    o3d.visualization.draw_geometries([point_cloud])
+
+    point_cloud_path_o3d = os.path.splitext(point_cloud_path)[0]
+    point_cloud_path_o3d = f"{point_cloud_path_o3d}_o3d.pcd"
+    o3d.io.write_point_cloud(point_cloud_path_o3d, point_cloud)
 
 
 @click.command()
@@ -64,9 +81,12 @@ def crop_point_cloud_interactively(point_cloud_path):
 @click.option("--nerf-point-cloud-path", type=str, required=True)
 def register_face_geometries(deca_point_cloud_path, nerf_point_cloud_path):
     nerf_point_cloud = o3d.io.read_point_cloud(nerf_point_cloud_path)
-    nerf_point_cloud.estimate_normals()
+    nerf_point_cloud_normals = copy.deepcopy(nerf_point_cloud)
+    nerf_point_cloud_normals.estimate_normals()
+
     deca_point_cloud = o3d.io.read_point_cloud(deca_point_cloud_path)
-    deca_point_cloud.estimate_normals()
+    deca_point_cloud_normals = copy.deepcopy(deca_point_cloud)
+    deca_point_cloud_normals.estimate_normals()
 
     trans_init = np.array(
         [
@@ -86,9 +106,11 @@ def register_face_geometries(deca_point_cloud_path, nerf_point_cloud_path):
     )
     print(evaluation)
 
+    draw_registration_result(deca_point_cloud, nerf_point_cloud, trans_init)
+
     registration_point2plane = o3d.pipelines.registration.registration_icp(
-        deca_point_cloud,
-        nerf_point_cloud,
+        deca_point_cloud_normals,
+        nerf_point_cloud_normals,
         max_correspondence_distance=threshold,
         init=trans_init,
         estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPlane(),
@@ -293,32 +315,11 @@ def sample_points(
     plt.savefig(os.path.join(output_dir, hist_fname))
 
 
-@click.command()
-@click.option("--point-cloud-path", type=str, required=True)
-def visualize_point_cloud(point_cloud_path):
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        torch.cuda.set_device(device)
-    else:
-        device = torch.device("cpu")
-
-    point_cloud_np = np.load(point_cloud_path, allow_pickle=True).item()
-
-    point_cloud = o3d.geometry.PointCloud()
-    point_cloud.points = o3d.utility.Vector3dVector(point_cloud_np["verts"])
-    point_cloud.colors = o3d.utility.Vector3dVector(point_cloud_np["rgb"])
-    o3d.visualization.draw_geometries([point_cloud])
-
-    point_cloud_path_o3d = os.path.splitext(point_cloud_path)[0]
-    point_cloud_path_o3d = f"{point_cloud_path_o3d}_o3d.pcd"
-    o3d.io.write_point_cloud(point_cloud_path_o3d, point_cloud)
-
-
 sample_nerfie.add_command(convert_mesh_to_point_cloud)
+sample_nerfie.add_command(convert_np_point_cloud_to_o3d)
 sample_nerfie.add_command(crop_point_cloud_interactively)
 sample_nerfie.add_command(register_face_geometries)
 sample_nerfie.add_command(sample_points)
-sample_nerfie.add_command(visualize_point_cloud)
 
 
 if __name__ == "__main__":
